@@ -22,9 +22,8 @@
 
 ERR=[]
 
-from optparse import make_option
 try:
-    from pynagios import Plugin, Response, CRITICAL
+    from pynag.Plugins import PluginHelper, ok, warning, critical, unknown
 except ImportError, err:
     ERR.append("%s" % err)
 
@@ -39,80 +38,60 @@ if(ERR):
     print "%s %s" % ("CRIT:","; ".join(ERR))
     exit()
 
-class BaculaCheck(Plugin):
-    """
-    Nagios plugin to check if bacula is running on host.
-    """
-    database = make_option("-d", "--database",
-        dest="database",
-        type="string",
-        default="bacula",
-        help="bacula database title (default: 'bacula')",)
-    hours = make_option("--hours", type="int",
-        dest="hours",
-        default="72",
-        help="limit check to within last HOURS")
-    job = make_option("-j", "--job", dest="job",
-        help="bacula job to check")
-    user = make_option("-u", "--username",
-        dest="username",
-        help="database user")
-    passwd = make_option("-p", "--password",
-        dest="password",
-        help="database password")
-    port = make_option("-P", "--port",
-        dest="port",
-        type="int",
-        help="database port")
+class BaculaCheck(PluginHelper):
+	"""
+	Nagios plugin to check if bacula is running on host.
+	"""
 
-    def check(self):
-        """
-        Nagios check main function
-        """
-        self.options.host = self.options.hostname
-        opts = self.options
+	def setup(self):
+		self.parser.add_option("-m", help="bacula database title (default: 'bacula')", dest='database', default='bacula')
+		self.parser.add_option("-s", help="database hostname", dest='hostname', default='')
+		self.parser.add_option('-t', help="limit check to within last HOURS", dest='hours', default='72')
+		self.parser.add_option('-j', help="bacula job to check", dest="job")
+		self.parser.add_option('-u', help="database user", dest="username")
+		self.parser.add_option('-p', help="database password", dest="password")
+		self.parser.add_option('-o', help="database port", dest="port")
+		self.parse_arguments()
 
-        if opts.verbosity > 2:
-            print opts
+	def check(self):
+		"""
+		Nagios check main function
+		"""
+		self.options.host = self.options.hostname
+		opts = self.options
 
-        # Grab only hostname, username, password and port.
-        conn_fields = dict((k, v) for (k, v) in vars(opts).items()
-            if v is not None and k in ('host', 'user', 'passwd', 'port'))
+		# Grab only hostname, username, password and port.
+		conn_fields = dict((k, v) for (k, v) in vars(opts).items()
+		if v is not None and k in ('host', 'user', 'passwd', 'port'))
 
-        if opts.verbosity > 2:
-            print conn_fields
+        	# Create db connection
+        	try:
+            		self.conn = mysqldb.connect(db=opts.database,
+                	cursorclass=mysqldb.cursors.DictCursor,
+                	**conn_fields)
+        	except mysqldb.Error, err:
+            		return self.exit(summary="Could not connect to database", long_otput=err.args[1], exit_code=unknown, perfdata='' )
 
-        # Create db connection
-        try:
-            self.conn = mysqldb.connect(db=opts.database,
-                cursorclass=mysqldb.cursors.DictCursor,
-                **conn_fields)
-        except mysqldb.Error, err:
-            return Response(CRITICAL, err.args[1])
+        	# Create a cursor, given the db connection succeeded
+        	cursor = self.conn.cursor()
 
-        # Create a cursor, given the db connection succeeded
-        cursor = self.conn.cursor()
+        	if hasattr(opts, 'job') and opts.job is not None:
+            		# Check a single job
+            		value = check_single_job(cursor, opts)
+            		self.add_summary("Found %s successful Bacula jobs for %s" % (value, opts.job))
+			self.add_metric(label='jobs', value=int(value))
+        	else:
+            		# Check all jobs
+            		value = check_all_jobs(cursor, opts)
+            		self.add_summary("%(status)s%% jobs completed | (%(success)s/%(total)s) jobs.  Failed jobs: %(errors)s" % value)
+			self.add_metric(label='jobs_complete', value=int(value['status']))
 
-        if hasattr(opts, 'job') and opts.job is not None:
-            # Check a single job
-            value = check_single_job(cursor, opts)
+        	# Clean up!
+        	cursor.close()
+        	self.conn.close()
 
-            status = self.response_for_value(value,
-                "Found %s successful Bacula jobs for %s" % (value, opts.job))
-        else:
-            # Check all jobs
-            value = check_all_jobs(cursor, opts)
-            status = self.response_for_value(value["status"],
-                    "%(status)s%% jobs completed | "
-                    "(%(success)s/%(total)s) jobs."
-                    " Failed jobs: %(errors)s" % value)
-
-        # Clean up!
-        cursor.close()
-        self.conn.close()
-
-        return status
-
+		self.check_all_metrics()
+		self.exit()
 
 def check_single_job(cursor, opts):
     """
@@ -185,4 +164,6 @@ def check_all_jobs(cursor, opts):
 
 if __name__ == "__main__":
     # Build and Run the Nagios Plugin
-    BaculaCheck().check().exit()
+    plugin = BaculaCheck()
+    plugin.setup()
+    plugin.check()
