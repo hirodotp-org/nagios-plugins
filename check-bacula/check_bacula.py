@@ -79,7 +79,7 @@ class BaculaCheck(PluginHelper):
             		# Check a single job
             		value = check_single_job(cursor, opts)
             		self.add_summary("Found %s successful Bacula jobs for %s" % (value, opts.job))
-			self.add_metric(label='jobs', value=int(value))
+			self.add_metric(label='jobs', value=value)
         	else:
             		# Check all jobs
             		value = check_all_jobs(cursor, opts)
@@ -90,6 +90,8 @@ class BaculaCheck(PluginHelper):
         	cursor.close()
         	self.conn.close()
 
+		# assume okay by default, this is overwritten
+		self.status(ok)
 		self.check_all_metrics()
 		self.exit()
 
