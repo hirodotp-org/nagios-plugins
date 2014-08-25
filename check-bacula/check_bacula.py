@@ -48,8 +48,8 @@ class BaculaCheck(PluginHelper):
 		self.parser.add_option("-s", help="database hostname", dest='hostname', default='')
 		self.parser.add_option('-t', help="limit check to within last HOURS", dest='hours', default='72')
 		self.parser.add_option('-j', help="bacula job to check", dest="job")
-		self.parser.add_option('-u', help="database user", dest="username")
-		self.parser.add_option('-p', help="database password", dest="password")
+		self.parser.add_option('-u', help="database user", dest="user")
+		self.parser.add_option('-p', help="database password", dest="passwd")
 		self.parser.add_option('-o', help="database port", dest="port")
 		self.parse_arguments()
 
@@ -70,7 +70,7 @@ class BaculaCheck(PluginHelper):
                 	cursorclass=mysqldb.cursors.DictCursor,
                 	**conn_fields)
         	except mysqldb.Error, err:
-            		return self.exit(summary="Could not connect to database", long_otput=err.args[1], exit_code=unknown, perfdata='' )
+            		return self.exit(summary="Could not connect to database", long_output=err.args[1], exit_code=unknown, perfdata='' )
 
         	# Create a cursor, given the db connection succeeded
         	cursor = self.conn.cursor()
@@ -79,7 +79,7 @@ class BaculaCheck(PluginHelper):
             		# Check a single job
             		value = check_single_job(cursor, opts)
             		self.add_summary("Found %s successful Bacula jobs for %s" % (value, opts.job))
-			self.add_metric(label='jobs', value=value)
+			self.add_metric(perfdatastring="jobs=%s;;;;" % value)
         	else:
             		# Check all jobs
             		value = check_all_jobs(cursor, opts)

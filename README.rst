@@ -43,5 +43,5 @@ Options:
 
 Sample check_bacula.py usage to check number of backups over the past 72 hours
 
-  $ ./check_bacula.py -m bacula -u bacula -p bacula -t 72 -j client-backup --th metric=jobs,ok=2..inf,warning=1..2,critical=0..1 --no-perfdata
+  $ ./check_bacula.py -m bacula -u bacula -p bacula -t 72 -j client-backup --th metric=jobs,ok=2..inf,warning=1..2,critical=0..1
 
